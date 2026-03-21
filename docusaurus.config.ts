@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   clientModules: [require.resolve('./src/clientModule.ts')],
-  title: 'My Site',
+  title: 'Working Copy',
   tagline: '',
   favicon: 'img/favicon.ico',
 
@@ -67,7 +67,7 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'My Site',
+      title: 'Working Copy',
       items: [],
     },
     footer: {
