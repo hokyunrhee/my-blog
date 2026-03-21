@@ -68,13 +68,7 @@ const config: Config = {
     },
     navbar: {
       title: 'My Site',
-      items: [
-        {
-          href: 'https://github.com/facebook/docusaurus',
-          label: 'GitHub',
-          position: 'right',
-        },
-      ],
+      items: [],
     },
     footer: {
       copyright: `\u00a9 ${new Date().getFullYear()}`,
