@@ -169,10 +169,11 @@ article {
   margin: 0 auto;
 }
 
-/* Blog post title */
+/* Blog post title — override Docusaurus default 3rem → 2rem */
 article header h1,
 article header h2 {
   font-family: var(--ifm-heading-font-family);
+  font-size: 2rem !important;
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.25;
@@ -451,5 +452,10 @@ time,
   :root {
     --ifm-font-size-base: 16px;
     --blog-max-width: 100%;
+  }
+
+  article header h1,
+  article header h2 {
+    font-size: 1.5rem !important;
   }
 }
