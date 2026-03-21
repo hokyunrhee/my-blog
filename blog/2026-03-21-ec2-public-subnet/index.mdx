@@ -1,0 +1,96 @@
+---
+slug: ec2-public-subnet
+title: EC2를 public subnet에 두면 안 될까
+tags: [aws, networking, security]
+hide_table_of_contents: true
+---
+
+import Diagram from "./diagram";
+
+# EC2를 public subnet에 두면 안 될까
+
+Private subnet은 EC2 배포의 필수 조건이 아니다. 올바르게 구성한 public subnet EC2는 VPS 호스팅과 구조적으로 다르지 않다. 왜 괜찮은지, 그리고 Kamal + AWS SSM으로 실제로 어떻게 구성했는지를 다룬다.
+
+## AWS Well-Architected Framework의 모범 사례
+
+AWS의 모범 사례를 따르면 EC2는 private subnet에 배치하고 load balancer만 외부에 노출해야 한다. 합리적인 원칙이지만, 따르려면 구성이 복잡해진다. Private subnet의 EC2가 외부 API를 호출하거나 패키지를 설치하려면 **NAT Gateway**가 필요하다. 이 비용을 받아들이기 전에, 실제로 무엇이 다른지 따져보자.
+
+<!-- truncate -->
+
+## VPS 호스팅과의 구조적 비교
+
+Hetzner, DigitalOcean, Vultr 같은 VPS 호스팅에서는 공인 IP를 가진 서버에 애플리케이션을 배포하고 방화벽으로 필요한 포트만 여는 것이 표준 구성이다. AWS Lightsail도 마찬가지다. 모든 Lightsail 인스턴스는 public subnet에 위치한다. **AWS EC2 public subnet + Security Group** 조합은 이와 구조적으로 같다. 공인 IP가 존재하지만, Security Group이 허용하지 않는 곳에서는 도달할 수 없다.
+
+public subnet과 private subnet의 실제 차이는 무엇일까? EC2가 받는 위협을 유형별로 나눠 보자.
+
+## 위협 분류
+
+### 인프라와 상관없는 위협
+
+애플리케이션 계층 공격(SQL Injection, XSS 등)은 VPS든, AWS EC2 public subnet이든, private subnet이든 똑같이 발생한다. HTTP 요청이 애플리케이션에 도달하는 한, subnet 위치는 방어에 영향을 주지 않는다. 실제 보안 위험의 상당 부분은 이러한 유형에서 발생한다. 코드가 취약하면 인프라로 막을 수 없다.
+
+### AWS에서만 존재하는 위협: IMDS를 통한 피해 확산
+
+VPS에서 SSRF(Server-Side Request Forgery) 취약점이 발생하면 피해 범위는 대게 해당 서버가 접근할 수 있는 내부 네트워크에 한정된다. AWS EC2에서 SSRF가 발생하면 Instance Metadata Service를 통해 IAM role의 credential을 탈취할 수 있고, 그 role의 권한에 따라 같은 계정의 S3, RDS 등 다른 리소스까지 접근할 수도 있다.
+
+이 위협은 private subnet으로도 막을 수 없다. CloudFront를 경유해 정상적으로 도달한 요청이 SSRF를 유발하면, private subnet EC2에서도 IMDS에 접근할 수 있다. **IMDSv2 강제**는 subnet 위치와 관계없이 반드시 적용해야 한다.
+
+### Private subnet만이 제공하는 것
+
+Private subnet은 보안 정책을 네트워크 수준에서 강제한다. Security Group 같은 설정 기반 통제와 다른 점이 여기에 있다.
+
+**첫째, 외부에서 들어오는 연결을 구조적으로 차단한다.** Private subnet의 EC2는 공인 IP가 없으므로, Security Group을 잘못 열어도 외부에서 도달할 경로 자체가 존재하지 않는다. Public subnet에서는 Security Group 규칙 하나만 잘못 변경되어도 즉시 노출된다.
+
+**둘째, 외부로 나가는 트래픽을 통제할 수 있다.** Public subnet에서는 Internet Gateway를 통한 외부 접근이 기본값이다. 서버가 침해되면 공격자는 별다른 제약 없이 데이터를 유출하거나 외부 서버에 연결할 수 있다. Private subnet은 다르다. NAT Gateway를 명시적으로 추가해야만 외부 통신이 가능하며, NAT 없이 VPC Endpoint만 구성하면 AWS 서비스 접근만 허용하고 인터넷 접근을 완전히 차단할 수 있다.
+
+단, 대부분의 운영 환경에서는 외부 API 호출과 패키지 설치를 위해 NAT Gateway를 구성한다. NAT Gateway가 있으면 침해된 서버에서도 외부로 통신할 수 있으므로, 이 경우 양쪽의 차이는 줄어든다.
+
+## 레퍼런스 구현
+
+이 글에서 다루는 구성은 [kamal-ssm-deploy](https://github.com/hokyunrhee/kamal-ssm-deploy)에 AWS CDK로 구현해 두었다.
+
+<Diagram />
+
+### 1. Security Group: CloudFront prefix list로 443만 허용
+
+보안 그룹 인바운드 규칙을 `com.amazonaws.global.cloudfront.origin-facing` managed prefix list의 443 포트만 허용하도록 설정한다. 이 prefix list는 CloudFront가 origin에 접근할 때 사용하는 IP 범위를 포함하며, AWS가 자동으로 관리한다. 그 외의 포트와 출발지는 모두 차단된다. EC2의 공인 IP를 직접 알아내더라도, CloudFront를 경유하지 않는 요청은 보안 그룹에서 차단된다.
+
+다만 한계가 하나 있다. 이 prefix list는 모든 AWS 고객의 CloudFront distribution이 공유하는 IP 범위다. 공격자가 자신의 distribution을 만들고 origin을 이 EC2의 IP로 설정하면 보안 그룹을 통과할 수 있다. 이 틈은 CloudFront에서 origin으로 전달하는 custom header를 EC2에서 검증하는 방식으로 보완한다.
+
+### 2. IMDSv2 강제
+
+EC2의 Instance Metadata Service를 v2로 강제한다. `httpTokens: REQUIRED`와 `httpPutResponseHopLimit: 1`을 설정하면 대부분의 SSRF를 통한 metadata 접근을 차단할 수 있다. IMDSv2는 metadata 요청 전에 PUT 요청으로 세션 토큰을 먼저 획득해야 하는데, 일반적인 SSRF 취약점으로는 PUT 요청을 보내기 어렵다. hop limit 1은 네트워크 홉을 거친 요청이 토큰을 받지 못하게 차단하며, Docker bridge network 위의 컨테이너에서도 IMDS에 접근할 수 없게 만든다.
+
+### 3. SSM Session Manager: SSH 포트 없는 관리 접속
+
+EC2에 포트 22를 열지 않는다. 관리 접속은 **AWS Systems Manager Session Manager**를 통한다.
+
+SSM Agent가 AWS 엔드포인트로 아웃바운드 연결을 유지하므로, 외부에서 EC2로 들어오는 포트를 열 필요가 없다. 인증은 IAM으로 처리되고, 모든 세션은 CloudTrail에 기록된다. Kamal은 `proxy_command` 설정을 통해 SSM 터널 위에서 SSH 세션을 맺으므로, 기존 배포 워크플로우가 그대로 유지된다.
+
+### 4. 결과
+
+Private subnet이 아닌 public subnet에 의도적으로 배치한다. 위의 세 가지 설정이 적용되면, EC2에 도달 가능한 경로는 CloudFront를 경유한 HTTPS 트래픽뿐이다. 관리 접속은 SSM의 아웃바운드 연결로 처리된다. 외부에서 EC2로 직접 접근할 수 있는 포트는 하나도 없다.
+
+## Private subnet이 해결하는 것과 해결하지 않는 것
+
+Private subnet이 실제로 해결해 주는 것과 그렇지 않은 것을 나눠 본다.
+
+### 해결하는 것
+
+- **설정 변경에 대한 구조적 안전망.** 보안 그룹을 잘못 열어도 외부에서 도달할 경로가 없다. 규모가 큰 조직이라면 더 중요할 수 있다.
+
+- **외부 트래픽 통제.** 모든 외부 통신이 NAT Gateway라는 단일 지점을 거치므로, 보안 사고 시 추적이 수월하다.
+
+- **감사 대응.** "private subnet에 있다"는 구조적 증빙은 감사인이 검증하기 쉽다. 설정 기반 증빙은 감사 요구사항에 따라 인정받지 못할 수도 있다.
+
+### 해결하지 않는 것
+
+- **SSRF를 통한 IMDS credential 탈취.** 앞서 다뤘듯이, private subnet에서도 IMDS는 접근 가능하다. IMDSv2는 별도로 적용해야 한다.
+
+- **애플리케이션 계층 공격.** SQL Injection, XSS 등은 subnet 위치와 무관하다.
+
+---
+
+Private subnet의 이점은 분명하다. 인바운드 차단, 외부 트래픽 통제, 설정 실수 방지, 감사 대응을 네트워크 수준에서 해결해 준다. 구조적 보장이 필요하다면 CloudFront VPC Origins로 private subnet에 배치하는 경로도 있다.
+
+하지만 NAT Gateway 비용과 구성 복잡도를 감수할 이유가 없다면, 올바르게 설정된 public subnet EC2는 그 자체로 충분한 선택이다.
