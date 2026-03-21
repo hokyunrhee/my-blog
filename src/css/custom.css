@@ -142,16 +142,19 @@ html {
   padding-right: var(--blog-padding) !important;
 }
 
-/* Override Docusaurus grid — main should fill 100%, no offset */
-.blog-wrapper .col--9,
-.blog-list-page .col--9 {
+/* Neutralize grid row negative margins for top-level blog row */
+.main-wrapper > .container > .row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Override Docusaurus grid — main content should fill 100%, no offset */
+.main-wrapper > .container > .row > main {
   --ifm-col-width: 100% !important;
   max-width: 100% !important;
   flex: 0 0 100% !important;
-}
-
-.blog-wrapper .col--offset-1,
-.blog-list-page .col--offset-1 {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   margin-left: 0 !important;
 }
 
