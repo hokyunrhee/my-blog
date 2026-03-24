@@ -177,12 +177,11 @@ export default function Diagram() {
     <div
       style={{
         fontFamily: font,
-        maxWidth: 740,
-        margin: "2rem 0",
+        margin: "2rem auto",
         padding: "1.5rem",
         background: "#fafafa",
         borderRadius: 8,
-        border: "1px solid #e4e4e7",
+        border: "1px solid #212147",
       }}
     >
       <svg viewBox="0 0 700 490" width="100%">

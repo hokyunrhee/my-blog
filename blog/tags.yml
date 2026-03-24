@@ -6,6 +6,14 @@ networking:
   label: Networking
   permalink: /networking
 
+kamal:
+  label: Kamal
+  permalink: /kamal
+
+ci-cd:
+  label: CI/CD
+  permalink: /ci-cd
+
 security:
   label: Security
   permalink: /security
