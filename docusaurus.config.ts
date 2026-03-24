@@ -17,6 +17,7 @@ const config: Config = {
 
   url: "https://workingcopy.dev",
   baseUrl: "/",
+  trailingSlash: false,
 
   organizationName: "hokyunrhee",
   projectName: "my-blog",
