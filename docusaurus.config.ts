@@ -60,7 +60,9 @@ const config: Config = {
     // Replace with your project's social card
     image: "img/docusaurus-social-card.jpg",
     colorMode: {
-      respectPrefersColorScheme: true,
+      defaultMode: "dark",
+      disableSwitch: true,
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: "Working Copy",
@@ -70,7 +72,7 @@ const config: Config = {
       copyright: `\u00a9 ${new Date().getFullYear()}`,
     },
     prism: {
-      theme: prismThemes.vsLight,
+      theme: prismThemes.vsDark,
       darkTheme: prismThemes.vsDark,
     },
   } satisfies Preset.ThemeConfig,
