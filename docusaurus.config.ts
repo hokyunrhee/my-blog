@@ -74,6 +74,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.vsDark,
       darkTheme: prismThemes.vsDark,
+      additionalLanguages: ["ruby"],
     },
   } satisfies Preset.ThemeConfig,
 };
